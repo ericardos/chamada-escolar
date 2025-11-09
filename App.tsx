@@ -177,40 +177,90 @@ const App: React.FC = () => {
   const handleExportCSV = () => {
     if (!activeClass || activeClass.students.length === 0) return;
 
+    // Get year, month, and days in month from selectedDate
+    const date = new Date(selectedDate + 'T00:00:00');
+    const year = date.getFullYear();
+    const month = date.getMonth(); // 0-indexed
+    const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(date).toUpperCase();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    // Define status map
     const statusMap = {
         [AttendanceStatus.Present]: 'P',
         [AttendanceStatus.Absent]: 'F',
         [AttendanceStatus.Justified]: 'FJ',
-        [AttendanceStatus.Pending]: '', // Empty string for a blank cell
     };
 
-    const allDates = new Set<string>();
-    activeClass.students.forEach(s => {
-        Object.keys(s.attendance).forEach(date => allDates.add(date));
+    // Find total number of class days in the month for percentage calculation
+    const classDaysInMonth = new Set<string>();
+    activeClass.students.forEach(student => {
+        for (const d in student.attendance) {
+            const recordDate = new Date(d + 'T00:00:00');
+            if (recordDate.getFullYear() === year && recordDate.getMonth() === month) {
+                classDaysInMonth.add(d);
+            }
+        }
+    });
+    const totalClassesInMonth = classDaysInMonth.size;
+
+    // Build CSV content
+    let csvContent = 'CONTROLE DE FREQUÊNCIA\n\n';
+    csvContent += `Ano,${year},,Mês,${monthName}\n\n`;
+    csvContent += 'P,Presença\n';
+    csvContent += 'F,Falta\n';
+    csvContent += 'FJ,Falta Justificada\n\n';
+
+
+    // Create headers
+    const dayHeaders = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
+    const headers = ['Nº', 'Nome', ...dayHeaders, 'Total de Faltas', '% de Frequência'];
+    csvContent += headers.join(',') + '\n';
+
+    // Process each student
+    const rows = activeClass.students.map((student, index) => {
+        const studentRow = [(index + 1).toString(), `"${student.name.replace(/"/g, '""')}"`];
+        let totalAbsences = 0;
+        let totalPresents = 0;
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dayString = day.toString().padStart(2, '0');
+            const monthString = (month + 1).toString().padStart(2, '0');
+            const currentDate = `${year}-${monthString}-${dayString}`;
+            
+            const status = student.attendance[currentDate];
+            let mappedStatus = '';
+
+            if (status && status !== AttendanceStatus.Pending) {
+                 const typedStatus = status as keyof typeof statusMap;
+                 mappedStatus = statusMap[typedStatus] || '';
+                 if (status === AttendanceStatus.Absent) {
+                    totalAbsences++;
+                 }
+                 if (status === AttendanceStatus.Present) {
+                    totalPresents++;
+                 }
+            }
+            studentRow.push(mappedStatus);
+        }
+
+        const attendancePercentage = totalClassesInMonth > 0
+            ? `${Math.round((totalPresents / totalClassesInMonth) * 100)}%`
+            : '0%';
+        
+        studentRow.push(totalAbsences.toString());
+        studentRow.push(attendancePercentage);
+
+        return studentRow.join(',');
     });
 
-    const sortedDates = Array.from(allDates).sort();
-
-    const formattedHeaders = sortedDates.map(date => new Date(date + 'T00:00:00').toLocaleDateString());
-    const headers = ['Nome', ...formattedHeaders];
+    csvContent += rows.join('\n');
     
-    const rows = activeClass.students.map(s => {
-        const studentRow = [`"${s.name.replace(/"/g, '""')}"`];
-        sortedDates.forEach(date => {
-            const status = s.attendance[date] || AttendanceStatus.Pending;
-            studentRow.push(statusMap[status]);
-        });
-        return studentRow;
-    });
-
-    let csvContent = headers.join(',') + '\n' 
-                   + rows.map(r => r.join(',')).join('\n');
-    
+    // Generate and download file
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    const fileName = `historico_presenca_${activeClass.name.replace(/\s+/g, '_')}.csv`;
+    const fileName = `Frequencia_${activeClass.name.replace(/\s+/g, '_')}_${monthName}_${year}.csv`;
     link.setAttribute("download", fileName);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
