@@ -1,0 +1,7 @@
+{
+  "name": "Chamada Escolar Via QR code",
+  "description": "An application to manage attendance lists for multiple classes. Users can upload a list of names, mark attendance by scanning individual student QR codes, and generate printable QR codes for each student.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
