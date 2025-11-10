@@ -22,3 +22,9 @@ export interface Class {
     name: string;
     students: Student[];
 }
+
+export interface School {
+    id: string;
+    name: string;
+    classes: Class[];
+}

@@ -1,47 +1,38 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Student, AttendanceStatus, SortOrder, Class } from './types';
+import { Student, AttendanceStatus, SortOrder, Class, School } from './types';
 import { Header } from './components/Header';
 import { Summary } from './components/Summary';
 import { StudentQRCodeModal } from './components/QRCodeModal';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { StudentItem } from './components/StudentItem';
-import { PlusIcon, UploadIcon, QrCodeIcon, BroomIcon, SortAscendingIcon, SortDescendingIcon, CameraIcon, StudentsIcon, ExportIcon, HistoryIcon } from './components/icons';
+import { PlusIcon, UploadIcon, QrCodeIcon, BroomIcon, SortAscendingIcon, SortDescendingIcon, CameraIcon, StudentsIcon, ExportIcon, HistoryIcon, SchoolIcon } from './components/icons';
 import { ClassTabs } from './components/ClassTabs';
 import { AddClassModal } from './components/AddClassModal';
 import { QRScannerModal } from './components/QRScannerModal';
 import { AttendanceHistoryModal } from './components/AttendanceHistoryModal';
+import { SchoolTabs } from './components/SchoolTabs';
+import { AddSchoolModal } from './components/AddSchoolModal';
 
-// Helper to get today's date in YYYY-MM-DD format
 const getTodayString = () => {
     const today = new Date();
     today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
     return today.toISOString().split('T')[0];
 };
 
-
 const App: React.FC = () => {
-  const [classes, setClasses] = useState<Class[]>(() => {
+  const [schools, setSchools] = useState<School[]>(() => {
     try {
-      const savedClasses = localStorage.getItem('attendance-classes-v2');
-      return savedClasses ? JSON.parse(savedClasses) : [];
+      const savedSchools = localStorage.getItem('attendance-schools-v1');
+      return savedSchools ? JSON.parse(savedSchools) : [];
     } catch (error) {
-      console.error("Failed to parse classes from localStorage", error);
+      console.error("Failed to parse schools from localStorage", error);
       return [];
     }
   });
-  const [activeClassId, setActiveClassId] = useState<string | null>(() => {
-    const savedClasses = localStorage.getItem('attendance-classes-v2');
-    if (savedClasses) {
-        try {
-            const parsedClasses = JSON.parse(savedClasses);
-            return parsedClasses.length > 0 ? parsedClasses[0].id : null;
-        } catch (error) {
-            return null;
-        }
-    }
-    return null;
-  });
+
+  const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
   
   const [selectedDate, setSelectedDate] = useState<string>(getTodayString());
   const [newStudentName, setNewStudentName] = useState('');
@@ -50,35 +41,62 @@ const App: React.FC = () => {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+  const [showAddSchoolModal, setShowAddSchoolModal] = useState(false);
   const [showAddClassModal, setShowAddClassModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  
+  const [schoolToDelete, setSchoolToDelete] = useState<School | null>(null);
   const [classToDelete, setClassToDelete] = useState<Class | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- State Persistence & Initialization ---
   useEffect(() => {
-    localStorage.setItem('attendance-classes-v2', JSON.stringify(classes));
-  }, [classes]);
+    localStorage.setItem('attendance-schools-v1', JSON.stringify(schools));
+  }, [schools]);
 
   useEffect(() => {
-    if (!activeClassId && classes.length > 0) {
-        setActiveClassId(classes[0].id);
+    if (!activeSchoolId && schools.length > 0) {
+      setActiveSchoolId(schools[0].id);
     }
-    if (classes.length === 0) {
+    if (schools.length === 0) {
+      setActiveSchoolId(null);
+    }
+  }, [schools, activeSchoolId]);
+
+  const activeSchool = useMemo(() => schools.find(s => s.id === activeSchoolId), [schools, activeSchoolId]);
+
+  useEffect(() => {
+    if (activeSchool) {
+        if (!activeClassId || !activeSchool.classes.find(c => c.id === activeClassId)) {
+            setActiveClassId(activeSchool.classes[0]?.id || null);
+        }
+    } else {
         setActiveClassId(null);
     }
-  }, [classes, activeClassId]);
+  }, [activeSchool, activeClassId]);
 
-  const activeClass = useMemo(() => classes.find(c => c.id === activeClassId), [classes, activeClassId]);
+  const activeClass = useMemo(() => activeSchool?.classes.find(c => c.id === activeClassId), [activeSchool, activeClassId]);
   
-  const updateStudentsForActiveClass = (newStudents: Student[]) => {
-    if (!activeClassId) return;
-    const newClasses = classes.map(c => 
-      c.id === activeClassId ? { ...c, students: newStudents } : c
-    );
-    setClasses(newClasses);
+  // --- Data Mutation Helpers ---
+  const updateSchool = (schoolId: string, updateFn: (school: School) => School) => {
+    setSchools(schools.map(s => s.id === schoolId ? updateFn(s) : s));
   };
 
+  const updateClass = (classId: string, updateFn: (cls: Class) => Class) => {
+    if (!activeSchoolId) return;
+    updateSchool(activeSchoolId, school => ({
+      ...school,
+      classes: school.classes.map(c => c.id === classId ? updateFn(c) : c)
+    }));
+  };
+
+  const updateStudentsForActiveClass = (newStudents: Student[]) => {
+    if (!activeClassId) return;
+    updateClass(activeClassId, cls => ({ ...cls, students: newStudents }));
+  };
+
+  // --- Handlers ---
   const handleSetStatus = (id: string, status: AttendanceStatus) => {
     if (!activeClass) return;
     const updatedStudents = activeClass.students.map(s => {
@@ -114,113 +132,135 @@ const App: React.FC = () => {
     updateStudentsForActiveClass([]);
     setShowClearConfirmModal(false);
   }
+  
+  const handleAddSchool = (name: string) => {
+    const newSchool: School = {
+        id: `${Date.now()}`,
+        name,
+        classes: []
+    };
+    const newSchools = [...schools, newSchool];
+    setSchools(newSchools);
+    setActiveSchoolId(newSchool.id);
+    setShowAddSchoolModal(false);
+  };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && activeClass) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        const names = text.split('\n').filter(name => name.trim() !== '');
-        const newStudents: Student[] = names.map(name => ({
-          id: `${Date.now()}-${Math.random()}-${name}`,
-          name: name.trim(),
-          attendance: {},
-        }));
-        updateStudentsForActiveClass([...activeClass.students, ...newStudents]);
-      };
-      reader.readAsText(file);
-    }
-    if(fileInputRef.current) {
-        fileInputRef.current.value = "";
-    }
+  const handleRequestDeleteSchool = (schoolId: string) => {
+      const school = schools.find(s => s.id === schoolId);
+      if (school) setSchoolToDelete(school);
+  }
+  
+  const handleConfirmDeleteSchool = () => {
+      if (!schoolToDelete) return;
+
+      const deletedIndex = schools.findIndex(s => s.id === schoolToDelete.id);
+      const newSchools = schools.filter(s => s.id !== schoolToDelete.id);
+
+      if (activeSchoolId === schoolToDelete.id) {
+          if (newSchools.length > 0) {
+              const newIndex = Math.max(0, deletedIndex - 1);
+              setActiveSchoolId(newSchools[newIndex].id);
+          } else {
+              setActiveSchoolId(null);
+          }
+      }
+      setSchools(newSchools);
+      setSchoolToDelete(null);
   };
 
   const handleAddClass = (name: string) => {
+    if (!activeSchoolId) return;
     const newClass: Class = {
         id: `${Date.now()}`,
         name,
         students: []
     };
-    const newClasses = [...classes, newClass];
-    setClasses(newClasses);
+    updateSchool(activeSchoolId, school => ({
+        ...school,
+        classes: [...school.classes, newClass]
+    }));
     setActiveClassId(newClass.id);
     setShowAddClassModal(false);
   };
   
   const handleRequestDeleteClass = (classId: string) => {
-    const foundClass = classes.find(c => c.id === classId);
+    const foundClass = activeSchool?.classes.find(c => c.id === classId);
     if (foundClass) {
         setClassToDelete(foundClass);
     }
   };
 
   const handleConfirmDeleteClass = () => {
-    if (!classToDelete) return;
+    if (!classToDelete || !activeSchoolId) return;
     
-    const deletedIndex = classes.findIndex(c => c.id === classToDelete.id);
-    const newClasses = classes.filter(c => c.id !== classToDelete.id);
-    
-    if (activeClassId === classToDelete.id) {
-        if (newClasses.length > 0) {
-            const newIndex = Math.max(0, deletedIndex - 1);
-            setActiveClassId(newClasses[newIndex].id);
-        } else {
-            setActiveClassId(null);
+    updateSchool(activeSchoolId, school => {
+        const deletedIndex = school.classes.findIndex(c => c.id === classToDelete.id);
+        const newClasses = school.classes.filter(c => c.id !== classToDelete.id);
+        
+        if (activeClassId === classToDelete.id) {
+            if (newClasses.length > 0) {
+                const newIndex = Math.max(0, deletedIndex - 1);
+                setActiveClassId(newClasses[newIndex].id);
+            } else {
+                setActiveClassId(null);
+            }
         }
-    }
-    
-    setClasses(newClasses);
+        return { ...school, classes: newClasses };
+    });
+
     setClassToDelete(null);
   };
 
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file && activeClass) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            const names = text.split('\n').filter(name => name.trim() !== '');
+            const newStudents: Student[] = names.map(name => ({
+            id: `${Date.now()}-${Math.random()}-${name}`,
+            name: name.trim(),
+            attendance: {},
+            }));
+            updateStudentsForActiveClass([...activeClass.students, ...newStudents]);
+        };
+        reader.readAsText(file);
+        }
+        if(fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+    };
+    
   const handleExportCSV = () => {
-    if (!activeClass || activeClass.students.length === 0) return;
+    if (!activeSchool || !activeClass || activeClass.students.length === 0) return;
 
-    // Get year, month, and days in month from selectedDate
     const date = new Date(selectedDate + 'T00:00:00');
     const year = date.getFullYear();
     const month = date.getMonth(); // 0-indexed
     const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(date).toUpperCase();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    // Define status map
     const statusMap = {
         [AttendanceStatus.Present]: 'P',
         [AttendanceStatus.Absent]: 'F',
         [AttendanceStatus.Justified]: 'FJ',
     };
 
-    // Find total number of class days in the month for percentage calculation
-    const classDaysInMonth = new Set<string>();
-    activeClass.students.forEach(student => {
-        for (const d in student.attendance) {
-            const recordDate = new Date(d + 'T00:00:00');
-            if (recordDate.getFullYear() === year && recordDate.getMonth() === month) {
-                classDaysInMonth.add(d);
-            }
-        }
-    });
-    const totalClassesInMonth = classDaysInMonth.size;
-
-    // Build CSV content
-    let csvContent = 'CONTROLE DE FREQUÊNCIA\n\n';
+    let csvContent = `ESCOLA ${activeSchool.name.toUpperCase()}\n\n`;
+    csvContent += 'CONTROLE DE FREQUÊNCIA\n';
     csvContent += `Ano,${year},,Mês,${monthName}\n\n`;
     csvContent += 'P,Presença\n';
     csvContent += 'F,Falta\n';
     csvContent += 'FJ,Falta Justificada\n\n';
 
-
-    // Create headers
     const dayHeaders = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
-    const headers = ['Nº', 'Nome', ...dayHeaders, 'Total de Faltas', '% de Frequência'];
+    const headers = ['Nº', 'Nome', ...dayHeaders, 'Total de Falta de Frequencia'];
     csvContent += headers.join(',') + '\n';
 
-    // Process each student
     const rows = activeClass.students.map((student, index) => {
         const studentRow = [(index + 1).toString(), `"${student.name.replace(/"/g, '""')}"`];
         let totalAbsences = 0;
-        let totalPresents = 0;
 
         for (let day = 1; day <= daysInMonth; day++) {
             const dayString = day.toString().padStart(2, '0');
@@ -233,39 +273,32 @@ const App: React.FC = () => {
             if (status && status !== AttendanceStatus.Pending) {
                  const typedStatus = status as keyof typeof statusMap;
                  mappedStatus = statusMap[typedStatus] || '';
-                 if (status === AttendanceStatus.Absent) {
+                 if (status === AttendanceStatus.Absent || status === AttendanceStatus.Justified) {
                     totalAbsences++;
-                 }
-                 if (status === AttendanceStatus.Present) {
-                    totalPresents++;
                  }
             }
             studentRow.push(mappedStatus);
         }
-
-        const attendancePercentage = totalClassesInMonth > 0
-            ? `${Math.round((totalPresents / totalClassesInMonth) * 100)}%`
-            : '0%';
         
         studentRow.push(totalAbsences.toString());
-        studentRow.push(attendancePercentage);
-
         return studentRow.join(',');
     });
 
     csvContent += rows.join('\n');
     
-    // Generate and download file
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    const fileName = `Frequencia_${activeClass.name.replace(/\s+/g, '_')}_${monthName}_${year}.csv`;
-    link.setAttribute("download", fileName);
-    link.style.visibility = 'hidden';
+    const fileName = `Frequencia_${activeSchool.name.replace(/\s+/g, '_')}_${activeClass.name.replace(/\s+/g, '_')}_${monthName}_${year}.csv`;
+    
+    link.href = url;
+    link.download = fileName;
+    
     document.body.appendChild(link);
     link.click();
+    
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
 
@@ -312,22 +345,49 @@ const App: React.FC = () => {
     }
   }
 
-  return (
-    <div className="bg-gray-900 min-h-screen text-gray-200 font-sans">
-      <div className="container mx-auto max-w-4xl p-4">
-        <Header />
+  const renderContent = () => {
+      if (schools.length === 0) {
+          return (
+             <div className="text-center py-12 bg-gray-800 p-6 rounded-lg shadow-2xl">
+                <SchoolIcon className="mx-auto h-16 w-16 text-gray-500" />
+                <h3 className="mt-2 text-lg font-medium text-white">Nenhuma escola encontrada</h3>
+                <p className="mt-1 text-sm text-gray-400">Crie sua primeira escola para começar.</p>
+                <div className="mt-6">
+                    <button
+                    type="button"
+                    onClick={() => setShowAddSchoolModal(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                    >
+                    <PlusIcon />
+                    Criar Escola
+                    </button>
+                </div>
+            </div>
+          );
+      }
 
-        <ClassTabs 
-            classes={classes}
-            activeClassId={activeClassId}
-            onSelectClass={setActiveClassId}
-            onAddClass={() => setShowAddClassModal(true)}
-            onDeleteClass={handleRequestDeleteClass}
-        />
+      if (!activeClass) {
+          return (
+             <div className="text-center py-12 bg-gray-800 p-6 rounded-b-lg shadow-2xl">
+                <StudentsIcon className="mx-auto h-16 w-16 text-gray-500" />
+                <h3 className="mt-2 text-lg font-medium text-white">Nenhuma turma nesta escola</h3>
+                <p className="mt-1 text-sm text-gray-400">Crie uma turma para começar a adicionar alunos.</p>
+                <div className="mt-6">
+                    <button
+                    type="button"
+                    onClick={() => setShowAddClassModal(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                    >
+                    <PlusIcon />
+                    Criar Turma
+                    </button>
+                </div>
+            </div>
+          );
+      }
 
-        <main className="bg-gray-800 p-6 rounded-b-lg shadow-2xl">
-          {activeClass ? (
-            <>
+      return (
+          <main className="bg-gray-800 p-6 rounded-b-lg shadow-2xl">
                 <div className="grid md:grid-cols-2 gap-6 mb-6">
                     <form onSubmit={handleAddStudent} className="flex gap-2">
                     <input
@@ -352,7 +412,7 @@ const App: React.FC = () => {
                             <UploadIcon />
                              <span className="hidden sm:inline">Planilha</span>
                         </button>
-                        <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
+                        <input type="file" accept=".csv,.txt" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                         <button onClick={() => setShowClearConfirmModal(true)} disabled={activeClass.students.length === 0} className="bg-red-800 hover:bg-red-900 text-white font-bold py-2 px-2 rounded-md flex items-center justify-center gap-2 transition disabled:bg-gray-600 disabled:cursor-not-allowed text-sm sm:text-base">
                             <BroomIcon />
                              <span className="hidden sm:inline">Limpar</span>
@@ -412,29 +472,41 @@ const App: React.FC = () => {
                         ))
                     )}
                 </div>
-            </>
-          ) : (
-             <div className="text-center py-12">
-                <StudentsIcon className="mx-auto h-16 w-16 text-gray-500" />
-                <h3 className="mt-2 text-lg font-medium text-white">Nenhuma turma encontrada</h3>
-                <p className="mt-1 text-sm text-gray-400">Crie sua primeira turma para começar.</p>
-                <div className="mt-6">
-                    <button
-                    type="button"
-                    onClick={() => setShowAddClassModal(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
-                    >
-                    <PlusIcon />
-                    Criar Turma
-                    </button>
-                </div>
-            </div>
-          )}
         </main>
+      );
+  }
+
+  return (
+    <div className="bg-gray-900 min-h-screen text-gray-200 font-sans">
+      <div className="container mx-auto max-w-4xl p-4">
+        <Header />
+
+        {schools.length > 0 && (
+            <>
+                <SchoolTabs
+                    schools={schools}
+                    activeSchoolId={activeSchoolId}
+                    onSelectSchool={setActiveSchoolId}
+                    onAddSchool={() => setShowAddSchoolModal(true)}
+                    onDeleteSchool={handleRequestDeleteSchool}
+                />
+                <ClassTabs 
+                    classes={activeSchool?.classes || []}
+                    activeClassId={activeClassId}
+                    onSelectClass={setActiveClassId}
+                    onAddClass={() => setShowAddClassModal(true)}
+                    onDeleteClass={handleRequestDeleteClass}
+                />
+            </>
+        )}
+        
+        {renderContent()}
+
       </div>
       
       {showQrModal && activeClass && <StudentQRCodeModal students={activeClass.students} onClose={() => setShowQrModal(false)} />}
       {showScannerModal && <QRScannerModal onScanSuccess={handleScanSuccess} onClose={() => setShowScannerModal(false)} />}
+      {showAddSchoolModal && <AddSchoolModal onAddSchool={handleAddSchool} onClose={() => setShowAddSchoolModal(false)} />}
       {showAddClassModal && <AddClassModal onAddClass={handleAddClass} onClose={() => setShowAddClassModal(false)} />}
       {showHistoryModal && activeClass && <AttendanceHistoryModal students={activeClass.students} onClose={() => setShowHistoryModal(false)} />}
       
@@ -454,7 +526,17 @@ const App: React.FC = () => {
         title="Excluir Turma"
         confirmText='Excluir'
       >
-        {classToDelete && <p>Você tem certeza que deseja excluir a turma <strong>{classToDelete.name}</strong>? Todos os alunos serão removidos permanentemente.</p>}
+        {classToDelete && <p>Você tem certeza que deseja excluir a turma <strong>{classToDelete.name}</strong>? Todos os dados dos alunos serão removidos permanentemente.</p>}
+      </ConfirmationModal>
+
+       <ConfirmationModal
+        isOpen={!!schoolToDelete}
+        onClose={() => setSchoolToDelete(null)}
+        onConfirm={handleConfirmDeleteSchool}
+        title="Excluir Escola"
+        confirmText='Excluir'
+      >
+        {schoolToDelete && <p>Você tem certeza que deseja excluir a escola <strong>{schoolToDelete.name}</strong>? Todas as turmas e alunos associados serão removidos permanentemente.</p>}
       </ConfirmationModal>
     </div>
   );
