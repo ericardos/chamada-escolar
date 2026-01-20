@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Student, AttendanceStatus } from '../types';
 
@@ -39,26 +40,26 @@ export const Summary: React.FC<SummaryProps> = ({ students, selectedDate }) => {
   }
 
   return (
-    <div className="grid grid-cols-3 md:grid-cols-5 gap-4 text-center bg-gray-900/50 p-4 rounded-lg">
-      <div>
-        <p className="text-2xl font-bold text-green-400">{summary.present}</p>
-        <p className="text-sm text-gray-400">Presentes</p>
+    <div className="grid grid-cols-5 gap-2 text-center bg-slate-900/60 p-2 rounded-xl border border-slate-700/50 mb-2">
+      <div className="flex flex-col items-center">
+        <p className="text-sm font-black text-emerald-400 leading-tight">{summary.present}</p>
+        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Pres.</p>
       </div>
-      <div>
-        <p className="text-2xl font-bold text-red-400">{summary.absent}</p>
-        <p className="text-sm text-gray-400">Faltas</p>
+      <div className="flex flex-col items-center">
+        <p className="text-sm font-black text-rose-400 leading-tight">{summary.absent}</p>
+        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Falta</p>
       </div>
-      <div>
-        <p className="text-2xl font-bold text-yellow-400">{summary.justified}</p>
-        <p className="text-sm text-gray-400">Justificadas</p>
+      <div className="flex flex-col items-center">
+        <p className="text-sm font-black text-amber-400 leading-tight">{summary.justified}</p>
+        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Just.</p>
       </div>
-      <div>
-        <p className="text-2xl font-bold text-gray-400">{summary.pending}</p>
-        <p className="text-sm text-gray-400">Pendentes</p>
+      <div className="flex flex-col items-center">
+        <p className="text-sm font-black text-slate-300 leading-tight">{summary.pending}</p>
+        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Pend.</p>
       </div>
-      <div className="col-span-3 md:col-span-1 mt-4 md:mt-0 border-t md:border-t-0 md:border-l border-gray-700 pt-4 md:pt-0 md:pl-4">
-        <p className="text-2xl font-bold text-blue-400">{summary.total}</p>
-        <p className="text-sm text-gray-400">Total</p>
+      <div className="flex flex-col items-center border-l border-slate-700/50">
+        <p className="text-sm font-black text-blue-400 leading-tight">{summary.total}</p>
+        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Total</p>
       </div>
     </div>
   );

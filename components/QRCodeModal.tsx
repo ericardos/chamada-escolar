@@ -1,6 +1,8 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { Student } from '../types';
 import { XIcon } from './icons';
+import { SupportSection } from './SupportSection';
 
 // This tells TypeScript that a 'QRCode' variable will exist in the global scope,
 // loaded from the script tag in index.html
@@ -18,14 +20,11 @@ const StudentQRItem: React.FC<{ student: Student }> = ({ student }) => {
 
     useEffect(() => {
         if (!canvasRef.current) return;
-
-        // Check if the QRCode library has loaded
         if (typeof QRCode === 'undefined') {
             console.error('QRCode library is not available.');
             setStatus('error');
             return;
         }
-
         const canvas = canvasRef.current;
         QRCode.toCanvas(canvas, student.id, { errorCorrectionLevel: 'H', width: 128 }, (error: Error | null) => {
             if (error) {
@@ -33,11 +32,9 @@ const StudentQRItem: React.FC<{ student: Student }> = ({ student }) => {
                 setStatus('error');
             } else {
                 setStatus('generated');
-                // Create a data URL for the download link
                 setQrDataUrl(canvas.toDataURL('image/png'));
             }
         });
-
     }, [student.id, student.name]);
 
     const fileName = `${student.name.replace(/\s+/g, '_')}.png`;
@@ -74,8 +71,8 @@ export const StudentQRCodeModal: React.FC<StudentQRCodeModalProps> = ({ students
                 <h2 className="text-2xl font-bold text-white">QR Codes da Turma</h2>
                 <p className="text-gray-400">Imprima esta página e distribua os QR Codes para os alunos.</p>
             </div>
-            <div>
-                 <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md mr-4">
+            <div className="flex items-center">
+                 <button onClick={() => window.print()} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md mr-4 transition-colors">
                     Imprimir
                 </button>
                 <button onClick={onClose} className="text-gray-400 hover:text-white transition">
@@ -86,11 +83,14 @@ export const StudentQRCodeModal: React.FC<StudentQRCodeModalProps> = ({ students
         
         <div className="overflow-y-auto print-container">
              {students.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {students.map(student => (
-                       <StudentQRItem key={student.id} student={student} />
-                    ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+                      {students.map(student => (
+                         <StudentQRItem key={student.id} student={student} />
+                      ))}
+                  </div>
+                  <SupportSection printMode={true} />
+                </>
             ) : (
                 <p className="text-center text-gray-400 py-8">Nenhum aluno para exibir QR Codes.</p>
             )}

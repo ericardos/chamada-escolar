@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Class } from '../types';
 import { PlusIcon, TrashIcon } from './icons';
@@ -12,16 +13,16 @@ interface ClassTabsProps {
 
 export const ClassTabs: React.FC<ClassTabsProps> = ({ classes, activeClassId, onSelectClass, onAddClass, onDeleteClass }) => {
   return (
-    <div className="flex border-b border-gray-700 no-print">
-      <div className="flex-grow flex items-center overflow-x-auto">
+    <div className="flex bg-slate-900/30 border-x border-slate-700/50 overflow-hidden no-print">
+      <div className="flex-grow flex items-center overflow-x-auto scrollbar-hide">
         {classes.map((cls) => (
-          <div key={cls.id} className="relative flex-shrink-0">
+          <div key={cls.id} className="relative flex-shrink-0 group border-r border-slate-700/30">
             <button
               onClick={() => onSelectClass(cls.id)}
-              className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors duration-200 focus:outline-none pr-8 ${
+              className={`px-6 py-4 text-xs font-black tracking-widest transition-all duration-200 focus:outline-none pr-12 uppercase ${
                 activeClassId === cls.id
-                  ? 'border-b-2 border-blue-500 text-white bg-gray-800 rounded-t-lg'
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-slate-800/40 text-blue-400 border-b-2 border-blue-500 shadow-inner'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/20'
               }`}
             >
               {cls.name}
@@ -31,7 +32,7 @@ export const ClassTabs: React.FC<ClassTabsProps> = ({ classes, activeClassId, on
                 e.stopPropagation();
                 onDeleteClass(cls.id);
               }}
-              className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded-full text-gray-500 hover:bg-gray-700 hover:text-white transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-700 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
               aria-label={`Remover turma ${cls.name}`}
             >
               <TrashIcon />
@@ -41,7 +42,7 @@ export const ClassTabs: React.FC<ClassTabsProps> = ({ classes, activeClassId, on
       </div>
       <button
         onClick={onAddClass}
-        className="ml-2 px-4 py-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-t-lg flex items-center gap-1 transition-colors flex-shrink-0"
+        className="px-6 py-4 text-xs font-black text-slate-300 bg-slate-800/50 hover:bg-slate-700 transition-all border-l border-slate-700/50 flex items-center gap-2 uppercase tracking-widest flex-shrink-0"
       >
         <PlusIcon />
         <span className="hidden sm:inline">Nova Turma</span>

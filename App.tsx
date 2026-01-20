@@ -13,6 +13,7 @@ import { QRScannerModal } from './components/QRScannerModal';
 import { AttendanceHistoryModal } from './components/AttendanceHistoryModal';
 import { SchoolTabs } from './components/SchoolTabs';
 import { AddSchoolModal } from './components/AddSchoolModal';
+import { SupportSection } from './components/SupportSection';
 
 const getTodayString = () => {
     const today = new Date();
@@ -50,7 +51,6 @@ const App: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- State Persistence & Initialization ---
   useEffect(() => {
     localStorage.setItem('attendance-schools-v1', JSON.stringify(schools));
   }, [schools]);
@@ -78,7 +78,6 @@ const App: React.FC = () => {
 
   const activeClass = useMemo(() => activeSchool?.classes.find(c => c.id === activeClassId), [activeSchool, activeClassId]);
   
-  // --- Data Mutation Helpers ---
   const updateSchool = (schoolId: string, updateFn: (school: School) => School) => {
     setSchools(schools.map(s => s.id === schoolId ? updateFn(s) : s));
   };
@@ -96,7 +95,6 @@ const App: React.FC = () => {
     updateClass(activeClassId, cls => ({ ...cls, students: newStudents }));
   };
 
-  // --- Handlers ---
   const handleSetStatus = (id: string, status: AttendanceStatus) => {
     if (!activeClass) return;
     const updatedStudents = activeClass.students.map(s => {
@@ -152,10 +150,8 @@ const App: React.FC = () => {
   
   const handleConfirmDeleteSchool = () => {
       if (!schoolToDelete) return;
-
       const deletedIndex = schools.findIndex(s => s.id === schoolToDelete.id);
       const newSchools = schools.filter(s => s.id !== schoolToDelete.id);
-
       if (activeSchoolId === schoolToDelete.id) {
           if (newSchools.length > 0) {
               const newIndex = Math.max(0, deletedIndex - 1);
@@ -192,11 +188,9 @@ const App: React.FC = () => {
 
   const handleConfirmDeleteClass = () => {
     if (!classToDelete || !activeSchoolId) return;
-    
     updateSchool(activeSchoolId, school => {
         const deletedIndex = school.classes.findIndex(c => c.id === classToDelete.id);
         const newClasses = school.classes.filter(c => c.id !== classToDelete.id);
-        
         if (activeClassId === classToDelete.id) {
             if (newClasses.length > 0) {
                 const newIndex = Math.max(0, deletedIndex - 1);
@@ -207,7 +201,6 @@ const App: React.FC = () => {
         }
         return { ...school, classes: newClasses };
     });
-
     setClassToDelete(null);
   };
 
@@ -234,42 +227,34 @@ const App: React.FC = () => {
     
   const handleExportCSV = () => {
     if (!activeSchool || !activeClass || activeClass.students.length === 0) return;
-
     const date = new Date(selectedDate + 'T00:00:00');
     const year = date.getFullYear();
-    const month = date.getMonth(); // 0-indexed
+    const month = date.getMonth();
     const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(date).toUpperCase();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-
     const statusMap = {
         [AttendanceStatus.Present]: 'P',
         [AttendanceStatus.Absent]: 'F',
         [AttendanceStatus.Justified]: 'FJ',
     };
-
     let csvContent = `ESCOLA ${activeSchool.name.toUpperCase()}\n\n`;
     csvContent += 'CONTROLE DE FREQUÊNCIA\n';
     csvContent += `Ano,${year},,Mês,${monthName}\n\n`;
     csvContent += 'P,Presença\n';
     csvContent += 'F,Falta\n';
     csvContent += 'FJ,Falta Justificada\n\n';
-
     const dayHeaders = Array.from({ length: daysInMonth }, (_, i) => String(i + 1));
     const headers = ['Nº', 'Nome', ...dayHeaders, 'Total de Falta de Frequencia'];
     csvContent += headers.join(',') + '\n';
-
     const rows = activeClass.students.map((student, index) => {
         const studentRow = [(index + 1).toString(), `"${student.name.replace(/"/g, '""')}"`];
         let totalAbsences = 0;
-
         for (let day = 1; day <= daysInMonth; day++) {
             const dayString = day.toString().padStart(2, '0');
             const monthString = (month + 1).toString().padStart(2, '0');
             const currentDate = `${year}-${monthString}-${dayString}`;
-            
             const status = student.attendance[currentDate];
             let mappedStatus = '';
-
             if (status && status !== AttendanceStatus.Pending) {
                  const typedStatus = status as keyof typeof statusMap;
                  mappedStatus = statusMap[typedStatus] || '';
@@ -279,36 +264,27 @@ const App: React.FC = () => {
             }
             studentRow.push(mappedStatus);
         }
-        
         studentRow.push(totalAbsences.toString());
         return studentRow.join(',');
     });
-
     csvContent += rows.join('\n');
-    
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     const fileName = `Frequencia_${activeSchool.name.replace(/\s+/g, '_')}_${activeClass.name.replace(/\s+/g, '_')}_${monthName}_${year}.csv`;
-    
     link.href = url;
     link.download = fileName;
-    
     document.body.appendChild(link);
     link.click();
-    
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-
   const handleScanSuccess = (studentId: string): string | null => {
     if (!activeClass) return null;
     let studentName: string | null = null;
-    
     const studentExists = activeClass.students.some(s => s.id === studentId);
     if (!studentExists) return null;
-
     const updatedStudents = activeClass.students.map(s => {
         if (s.id === studentId) {
             studentName = s.name;
@@ -317,7 +293,6 @@ const App: React.FC = () => {
         }
         return s;
     });
-    
     if(studentName) {
         updateStudentsForActiveClass(updatedStudents);
     }
@@ -348,18 +323,20 @@ const App: React.FC = () => {
   const renderContent = () => {
       if (schools.length === 0) {
           return (
-             <div className="text-center py-12 bg-gray-800 p-6 rounded-lg shadow-2xl">
-                <SchoolIcon className="mx-auto h-16 w-16 text-gray-500" />
-                <h3 className="mt-2 text-lg font-medium text-white">Nenhuma escola encontrada</h3>
-                <p className="mt-1 text-sm text-gray-400">Crie sua primeira escola para começar.</p>
+             <div className="text-center py-10 bg-slate-800/30 backdrop-blur-sm border border-slate-700/50 p-6 rounded-2xl shadow-xl">
+                <div className="bg-slate-700/50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                    <SchoolIcon className="h-8 w-8 text-blue-400" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Nenhuma escola cadastrada</h3>
+                <p className="mt-1 text-slate-400 text-sm max-w-xs mx-auto">Comece adicionando uma instituição.</p>
                 <div className="mt-6">
                     <button
                     type="button"
                     onClick={() => setShowAddSchoolModal(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                    className="inline-flex items-center px-5 py-2.5 border border-transparent text-xs font-bold rounded-xl text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-900/20 transition-all active:scale-95"
                     >
                     <PlusIcon />
-                    Criar Escola
+                    <span className="ml-2">Cadastrar Escola</span>
                     </button>
                 </div>
             </div>
@@ -368,18 +345,20 @@ const App: React.FC = () => {
 
       if (!activeClass) {
           return (
-             <div className="text-center py-12 bg-gray-800 p-6 rounded-b-lg shadow-2xl">
-                <StudentsIcon className="mx-auto h-16 w-16 text-gray-500" />
-                <h3 className="mt-2 text-lg font-medium text-white">Nenhuma turma nesta escola</h3>
-                <p className="mt-1 text-sm text-gray-400">Crie uma turma para começar a adicionar alunos.</p>
+             <div className="text-center py-10 bg-slate-800/30 backdrop-blur-sm border-x border-b border-slate-700/50 p-6 rounded-b-2xl shadow-xl">
+                <div className="bg-slate-700/50 p-4 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                    <StudentsIcon className="h-8 w-8 text-teal-400" />
+                </div>
+                <h3 className="text-lg font-bold text-white">Pronto para começar?</h3>
+                <p className="mt-1 text-slate-400 text-sm max-w-xs mx-auto">Crie uma turma nesta escola.</p>
                 <div className="mt-6">
                     <button
                     type="button"
                     onClick={() => setShowAddClassModal(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500"
+                    className="inline-flex items-center px-5 py-2.5 border border-transparent text-xs font-bold rounded-xl text-white bg-teal-600 hover:bg-teal-500 shadow-lg shadow-teal-900/20 transition-all active:scale-95"
                     >
                     <PlusIcon />
-                    Criar Turma
+                    <span className="ml-2">Criar Turma</span>
                     </button>
                 </div>
             </div>
@@ -387,79 +366,84 @@ const App: React.FC = () => {
       }
 
       return (
-          <main className="bg-gray-800 p-6 rounded-b-lg shadow-2xl">
-                <div className="grid md:grid-cols-2 gap-6 mb-6">
-                    <form onSubmit={handleAddStudent} className="flex gap-2">
+          <main className="bg-slate-800/30 backdrop-blur-md border border-slate-700/50 p-4 rounded-b-2xl shadow-xl">
+                <div className="flex flex-col lg:flex-row gap-4 mb-6">
+                    <form onSubmit={handleAddStudent} className="flex-grow flex gap-2">
                     <input
                         type="text"
                         value={newStudentName}
                         onChange={e => setNewStudentName(e.target.value)}
-                        placeholder="Inserir nome manualmente..."
-                        className="flex-grow bg-gray-700 border border-gray-600 rounded-md px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
+                        placeholder="Novo aluno..."
+                        className="flex-grow bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all"
                     />
-                    <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md flex items-center gap-2 transition">
+                    <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-xl flex items-center gap-2 transition-all active:scale-95 shadow-lg text-xs">
                         <PlusIcon />
-                        <span className="hidden sm:inline">Adicionar</span>
+                        <span>Adicionar</span>
                     </button>
                     </form>
 
-                    <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
-                        <button onClick={() => setShowScannerModal(true)} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-2 rounded-md flex items-center justify-center gap-2 transition text-sm sm:text-base">
+                    <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                        <button onClick={() => setShowScannerModal(true)} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg text-xs">
                             <CameraIcon />
-                            <span className="hidden sm:inline">Escanear QR</span>
+                            <span>Escanear</span>
                         </button>
-                        <button onClick={() => fileInputRef.current?.click()} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-2 rounded-md flex items-center justify-center gap-2 transition text-sm sm:text-base">
+                        <button onClick={() => fileInputRef.current?.click()} className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg text-xs">
                             <UploadIcon />
-                             <span className="hidden sm:inline">Planilha</span>
+                             <span>Importar</span>
                         </button>
                         <input type="file" accept=".csv,.txt" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
-                        <button onClick={() => setShowClearConfirmModal(true)} disabled={activeClass.students.length === 0} className="bg-red-800 hover:bg-red-900 text-white font-bold py-2 px-2 rounded-md flex items-center justify-center gap-2 transition disabled:bg-gray-600 disabled:cursor-not-allowed text-sm sm:text-base">
+                        <button onClick={() => setShowClearConfirmModal(true)} disabled={activeClass.students.length === 0} className="bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 px-3 rounded-xl flex items-center justify-center transition-all disabled:opacity-30 shadow-lg text-xs">
                             <BroomIcon />
-                             <span className="hidden sm:inline">Limpar</span>
                         </button>
                     </div>
                 </div>
-                 <div className="grid md:grid-cols-2 gap-6 mb-6">
-                     <div className="flex items-center gap-2">
-                        <label htmlFor="date-picker" className="font-semibold text-gray-300">Data da Chamada:</label>
-                        <input
-                            id="date-picker"
-                            type="date"
-                            value={selectedDate}
-                            onChange={e => setSelectedDate(e.target.value)}
-                            className="bg-gray-700 border border-gray-600 rounded-md px-3 py-1 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
-                        />
+
+                <div className="bg-slate-900/40 border border-slate-700/50 p-3 rounded-xl mb-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-blue-500/10 p-2 rounded-lg">
+                                <HistoryIcon className="text-blue-400 h-4 w-4" />
+                            </div>
+                            <input
+                                type="date"
+                                value={selectedDate}
+                                onChange={e => setSelectedDate(e.target.value)}
+                                className="bg-transparent text-white font-bold text-sm border-none p-0 focus:ring-0 cursor-pointer"
+                            />
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setShowQrModal(true)} disabled={activeClass.students.length === 0} className="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-3 rounded-lg text-[10px] uppercase tracking-wider disabled:opacity-50">
+                                QR CODES
+                            </button>
+                            <button onClick={() => setShowHistoryModal(true)} disabled={activeClass.students.length === 0} className="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-600 text-white font-bold py-1.5 px-3 rounded-lg text-[10px] uppercase tracking-wider disabled:opacity-50">
+                                HISTÓRICO
+                            </button>
+                            <button onClick={handleExportCSV} disabled={activeClass.students.length === 0} className="flex-1 sm:flex-none bg-amber-600 hover:bg-amber-500 text-white font-bold py-1.5 px-3 rounded-lg text-[10px] uppercase tracking-wider disabled:opacity-50">
+                                EXPORTAR
+                            </button>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-3 gap-2">
-                        <button onClick={() => setShowQrModal(true)} disabled={activeClass.students.length === 0} className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-2 rounded-md flex items-center justify-center gap-2 transition disabled:bg-gray-600 disabled:cursor-not-allowed text-sm sm:text-base">
-                            <QrCodeIcon />
-                             <span className="hidden sm:inline">Ver QRs</span>
-                        </button>
-                        <button onClick={() => setShowHistoryModal(true)} disabled={activeClass.students.length === 0} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 rounded-md flex items-center justify-center gap-2 transition disabled:bg-gray-500 disabled:cursor-not-allowed text-sm sm:text-base">
-                            <HistoryIcon />
-                             <span className="hidden sm:inline">Histórico</span>
-                        </button>
-                        <button onClick={handleExportCSV} disabled={activeClass.students.length === 0} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-2 rounded-md flex items-center justify-center gap-2 transition disabled:bg-gray-600 disabled:cursor-not-allowed text-sm sm:text-base">
-                            <ExportIcon />
-                             <span className="hidden sm:inline">Exportar</span>
-                        </button>
-                    </div>
-                 </div>
+                </div>
             
                 <Summary students={activeClass.students} selectedDate={selectedDate} />
             
-                {activeClass.students.length > 1 && (
-                        <div className="flex justify-end mt-4">
-                            <button onClick={toggleSortOrder} className="bg-gray-700 hover:bg-gray-600 text-gray-300 font-bold py-2 px-4 rounded-md flex items-center gap-2 transition text-sm">
-                                {sortOrder === SortOrder.Asc ? <SortAscendingIcon /> : <SortDescendingIcon />}
-                                Ordenar {sortOrder === SortOrder.Asc ? 'A-Z' : 'Z-A'}
-                            </button>
-                        </div>
+                <div className="flex items-center justify-between mt-6 mb-2 px-1">
+                    <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        LISTAGEM <span className="bg-slate-700 text-slate-300 text-[9px] px-1.5 py-0.5 rounded-md">{activeClass.students.length}</span>
+                    </h2>
+                    {activeClass.students.length > 1 && (
+                        <button onClick={toggleSortOrder} className="text-slate-500 hover:text-white flex items-center gap-1.5 transition-all text-[10px] font-bold uppercase tracking-wider">
+                            {sortOrder === SortOrder.Asc ? <SortAscendingIcon /> : <SortDescendingIcon />}
+                            ORDEM
+                        </button>
                     )}
+                </div>
 
-                <div className="mt-6 space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
                     {sortedStudents.length === 0 ? (
-                        <p className="text-center text-gray-400 py-8">Nenhum aluno nesta turma. Adicione um nome ou carregue uma planilha.</p>
+                        <div className="col-span-full text-center py-10 bg-slate-900/20 border border-dashed border-slate-700/50 rounded-xl">
+                             <p className="text-slate-600 text-xs font-medium italic">Nenhum aluno cadastrado.</p>
+                        </div>
                     ) : (
                         sortedStudents.map(student => (
                         <StudentItem 
@@ -477,31 +461,33 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="bg-gray-900 min-h-screen text-gray-200 font-sans">
-      <div className="container mx-auto max-w-4xl p-4">
+    <div className="bg-slate-950 min-h-screen text-slate-200 font-sans selection:bg-blue-500 selection:text-white flex flex-col">
+      <div className="container mx-auto max-w-5xl px-4 py-2 flex-grow overflow-hidden flex flex-col">
         <Header />
-
-        {schools.length > 0 && (
-            <>
-                <SchoolTabs
-                    schools={schools}
-                    activeSchoolId={activeSchoolId}
-                    onSelectSchool={setActiveSchoolId}
-                    onAddSchool={() => setShowAddSchoolModal(true)}
-                    onDeleteSchool={handleRequestDeleteSchool}
-                />
-                <ClassTabs 
-                    classes={activeSchool?.classes || []}
-                    activeClassId={activeClassId}
-                    onSelectClass={setActiveClassId}
-                    onAddClass={() => setShowAddClassModal(true)}
-                    onDeleteClass={handleRequestDeleteClass}
-                />
-            </>
-        )}
         
-        {renderContent()}
-
+        <div className="flex-grow flex flex-col min-h-0">
+            {schools.length > 0 && (
+                <>
+                    <SchoolTabs
+                        schools={schools}
+                        activeSchoolId={activeSchoolId}
+                        onSelectSchool={setActiveSchoolId}
+                        onAddSchool={() => setShowAddSchoolModal(true)}
+                        onDeleteSchool={handleRequestDeleteSchool}
+                    />
+                    <ClassTabs 
+                        classes={activeSchool?.classes || []}
+                        activeClassId={activeClassId}
+                        onSelectClass={setActiveClassId}
+                        onAddClass={() => setShowAddClassModal(true)}
+                        onDeleteClass={handleRequestDeleteClass}
+                    />
+                </>
+            )}
+            {renderContent()}
+        </div>
+        
+        <SupportSection />
       </div>
       
       {showQrModal && activeClass && <StudentQRCodeModal students={activeClass.students} onClose={() => setShowQrModal(false)} />}
@@ -514,9 +500,9 @@ const App: React.FC = () => {
         isOpen={showClearConfirmModal}
         onClose={() => setShowClearConfirmModal(false)}
         onConfirm={handleClearAll}
-        title="Limpar Lista de Alunos"
+        title="Limpar Lista"
       >
-        <p>Você tem certeza que deseja remover todos os alunos desta turma? Esta ação não pode ser desfeita.</p>
+        <p>Remover todos os alunos desta turma?</p>
       </ConfirmationModal>
 
       <ConfirmationModal
@@ -526,7 +512,7 @@ const App: React.FC = () => {
         title="Excluir Turma"
         confirmText='Excluir'
       >
-        {classToDelete && <p>Você tem certeza que deseja excluir a turma <strong>{classToDelete.name}</strong>? Todos os dados dos alunos serão removidos permanentemente.</p>}
+        {classToDelete && <p>Deseja excluir <strong>{classToDelete.name}</strong>?</p>}
       </ConfirmationModal>
 
        <ConfirmationModal
@@ -536,7 +522,7 @@ const App: React.FC = () => {
         title="Excluir Escola"
         confirmText='Excluir'
       >
-        {schoolToDelete && <p>Você tem certeza que deseja excluir a escola <strong>{schoolToDelete.name}</strong>? Todas as turmas e alunos associados serão removidos permanentemente.</p>}
+        {schoolToDelete && <p>Deseja excluir a escola <strong>{schoolToDelete.name}</strong>?</p>}
       </ConfirmationModal>
     </div>
   );
