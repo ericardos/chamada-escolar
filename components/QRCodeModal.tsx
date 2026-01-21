@@ -1,7 +1,6 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Student } from '../types';
-import { XIcon } from './icons';
 
 declare const QRCode: any;
 
@@ -10,67 +9,51 @@ interface StudentQRCodeModalProps {
   onClose: () => void;
 }
 
-const StudentQRItem: React.FC<{ student: Student }> = ({ student }) => {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-        if (!canvasRef.current || typeof QRCode === 'undefined') return;
-        
-        QRCode.toCanvas(canvasRef.current, student.id, { 
-          errorCorrectionLevel: 'M', 
-          width: 200, 
-          margin: 1,
-          color: {
-            dark: '#000000',
-            light: '#ffffff'
-          }
-        });
-    }, [student.id]);
-
-    return (
-        <div className="flex flex-col items-center justify-center p-4 border border-slate-700 bg-slate-800 rounded-xl">
-            <div className="bg-white p-2 rounded-lg shadow-sm">
-                <canvas 
-                    ref={canvasRef} 
-                    className="qr-canvas-item" 
-                    data-name={student.name}
-                    style={{ width: '120px', height: '120px', display: 'block' }} 
-                />
-            </div>
-            <span className="text-[10px] font-black text-slate-300 mt-2 uppercase truncate w-full text-center tracking-wider">
-                {student.name}
-            </span>
-        </div>
-    )
-}
-
+// Este componente não renderiza mais um Modal Visual, ele dispara a ação de geração de página
 export const StudentQRCodeModal: React.FC<StudentQRCodeModalProps> = ({ students, onClose }) => {
-  const handlePrint = () => {
-    const canvases = document.querySelectorAll('.qr-canvas-item');
-    if (canvases.length === 0) {
-      alert("Os QR Codes ainda estão carregando...");
+  useEffect(() => {
+    handleGeneratePrintPage();
+    onClose(); // Fecha o modal imediatamente pois a nova aba será aberta
+  }, []);
+
+  const handleGeneratePrintPage = async () => {
+    if (students.length === 0) {
+      alert("Não há alunos para gerar QR Codes.");
       return;
     }
 
-    let htmlContent = '';
-    canvases.forEach((canvas) => {
-      const canvasEl = canvas as HTMLCanvasElement;
-      const studentName = canvasEl.getAttribute('data-name') || "Aluno";
-      const imageData = canvasEl.toDataURL("image/png");
+    // Criamos uma janela temporária para renderizar os QR codes e pegar os Base64
+    const tempContainer = document.createElement('div');
+    tempContainer.style.display = 'none';
+    document.body.appendChild(tempContainer);
 
-      htmlContent += `
-        <div style="width: 45mm; height: 55mm; border: 1px solid #ddd; margin: 2mm; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; page-break-inside: avoid; vertical-align: top; box-sizing: border-box; padding: 5mm;">
-          <img src="${imageData}" style="width: 35mm; height: 35mm;" />
-          <div style="margin-top: 3mm; font-family: sans-serif; font-size: 10pt; font-weight: bold; text-align: center; text-transform: uppercase; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-            ${studentName}
-          </div>
+    let htmlCards = '';
+
+    // Gerar os QR Codes de forma assíncrona para garantir que todos sejam criados
+    for (const student of students) {
+      const canvas = document.createElement('canvas');
+      await new Promise<void>((resolve) => {
+        QRCode.toCanvas(canvas, student.id, { 
+          width: 250, 
+          margin: 1,
+          errorCorrectionLevel: 'M' 
+        }, () => resolve());
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      htmlCards += `
+        <div class="qr-card">
+          <img src="${imgData}" />
+          <div class="student-name">${student.name}</div>
         </div>
       `;
-    });
+    }
+
+    document.body.removeChild(tempContainer);
 
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      alert("Pop-up bloqueado! Por favor, autorize pop-ups para gerar o PDF.");
+      alert("O navegador bloqueou a abertura da página. Por favor, permita pop-ups.");
       return;
     }
 
@@ -78,65 +61,112 @@ export const StudentQRCodeModal: React.FC<StudentQRCodeModalProps> = ({ students
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Imprimir QR Codes</title>
+        <meta charset="UTF-8">
+        <title>Impressão - Lista de QR Codes</title>
         <style>
-          @page { size: A4; margin: 5mm; }
-          body { margin: 0; padding: 5mm; background: white; text-align: center; }
-          .page { width: 200mm; margin: 0 auto; text-align: left; }
+          @page { size: A4; margin: 10mm; }
+          body { 
+            margin: 0; 
+            padding: 0; 
+            background: #f1f5f9; 
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+          }
+          .no-print-bar {
+            width: 100%;
+            background: #1e293b;
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+          }
+          .print-btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+          }
+          .print-btn:hover { background: #1d4ed8; }
+          .page-container {
+            background: white;
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 20px auto;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+          }
+          .qr-card {
+            border: 1px solid #e2e8f0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            page-break-inside: avoid;
+            background: white;
+          }
+          .qr-card img { width: 100%; height: auto; max-width: 140px; }
+          .student-name {
+            margin-top: 10px;
+            font-size: 10pt;
+            font-weight: 800;
+            text-align: center;
+            text-transform: uppercase;
+            color: #1e293b;
+            word-break: break-all;
+          }
+          @media print {
+            .no-print-bar { display: none; }
+            body { background: white; }
+            .page-container { 
+              margin: 0; 
+              box-shadow: none; 
+              width: 100%;
+              padding: 0;
+            }
+            .qr-card { border: 1px solid #000; }
+          }
         </style>
       </head>
       <body>
-        <div class="page">${htmlContent}</div>
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-              window.close();
-            }, 500);
-          };
-        </script>
+        <div class="no-print-bar">
+          <div style="text-align: left">
+            <div style="font-weight: 900; font-size: 16px">PÁGINA DE IMPRESSÃO</div>
+            <div style="font-size: 12px; opacity: 0.8">Clique no botão ao lado para salvar como PDF</div>
+          </div>
+          <button class="print-btn" onclick="window.print()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+            BAIXAR PDF / IMPRIMIR
+          </button>
+        </div>
+        <div class="page-container">
+          ${htmlCards}
+        </div>
       </body>
       </html>
     `);
     printWindow.document.close();
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/95 backdrop-blur-xl flex items-center justify-center z-[99999] p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl p-6 max-w-5xl w-full flex flex-col h-[90vh]">
-        <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
-            <div>
-                <h2 className="text-xl font-black text-white uppercase tracking-tight">Gerar PDF de QR Codes</h2>
-                <p className="text-xs text-slate-500">Pronto para imprimir em folha A4.</p>
-            </div>
-            <div className="flex items-center gap-3">
-                 <button 
-                    onClick={handlePrint} 
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black py-3 px-8 rounded-2xl shadow-xl shadow-emerald-900/20 active:scale-95 transition-all uppercase flex items-center gap-2"
-                 >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-                    IMPRIMIR / SALVAR PDF
-                </button>
-                <button onClick={onClose} className="text-slate-400 hover:text-white p-2 bg-slate-800 rounded-xl">
-                    <XIcon />
-                </button>
-            </div>
-        </div>
-        
-        <div className="overflow-y-auto flex-grow grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pr-2 scrollbar-thin scrollbar-thumb-slate-700">
-            {students.map((student) => (
-                <StudentQRItem key={student.id} student={student} />
-            ))}
-        </div>
-        
-        <div className="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-600 font-bold uppercase tracking-widest">
-            <span>Total: {students.length} alunos</span>
-            <div className="flex items-center gap-2">
-                <span className="bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded">DICA</span>
-                <span>Se a janela não abrir, verifique se o navegador bloqueou o pop-up.</span>
-            </div>
-        </div>
-      </div>
-    </div>
-  );
+  return null; // O componente não precisa renderizar nada no DOM principal
 };
