@@ -8,10 +8,18 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1/build/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     body { background-color: #020617; color: white; margin: 0; }
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .modal-open { overflow: hidden; }
+    
+    /* Estilos para o PDF oculto */
+    #pdf-template {
+      color: black;
+      background: white;
+    }
   </style>
 <script type="importmap">
 {

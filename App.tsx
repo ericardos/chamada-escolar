@@ -283,19 +283,27 @@ const App: React.FC = () => {
   const handleScanSuccess = (studentId: string): string | null => {
     if (!activeClass) return null;
     let studentName: string | null = null;
-    const studentExists = activeClass.students.some(s => s.id === studentId);
-    if (!studentExists) return null;
-    const updatedStudents = activeClass.students.map(s => {
-        if (s.id === studentId) {
-            studentName = s.name;
-            const newAttendance = { ...s.attendance, [selectedDate]: AttendanceStatus.Present };
-            return { ...s, attendance: newAttendance };
-        }
-        return s;
-    });
-    if(studentName) {
-        updateStudentsForActiveClass(updatedStudents);
-    }
+    
+    // Encontrar o aluno
+    const student = activeClass.students.find(s => s.id === studentId);
+    if (!student) return null;
+
+    studentName = student.name;
+
+    // Atualizar estado
+    updateClass(activeClass.id, cls => ({
+        ...cls,
+        students: cls.students.map(s => {
+            if (s.id === studentId) {
+                return { 
+                    ...s, 
+                    attendance: { ...s.attendance, [selectedDate]: AttendanceStatus.Present } 
+                };
+            }
+            return s;
+        })
+    }));
+
     return studentName;
   };
 
@@ -490,7 +498,13 @@ const App: React.FC = () => {
         <SupportSection />
       </div>
       
-      {showQrModal && activeClass && <StudentQRCodeModal students={activeClass.students} onClose={() => setShowQrModal(false)} />}
+      {showQrModal && activeClass && (
+        <StudentQRCodeModal 
+            students={activeClass.students} 
+            className={activeClass.name}
+            onClose={() => setShowQrModal(false)} 
+        />
+      )}
       {showScannerModal && <QRScannerModal onScanSuccess={handleScanSuccess} onClose={() => setShowScannerModal(false)} />}
       {showAddSchoolModal && <AddSchoolModal onAddSchool={handleAddSchool} onClose={() => setShowAddSchoolModal(false)} />}
       {showAddClassModal && <AddClassModal onAddClass={handleAddClass} onClose={() => setShowAddClassModal(false)} />}

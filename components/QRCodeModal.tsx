@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { Student } from '../types';
 
 declare const QRCode: any;
@@ -7,166 +7,146 @@ declare const QRCode: any;
 interface StudentQRCodeModalProps {
   students: Student[];
   onClose: () => void;
+  className?: string;
 }
 
-// Este componente não renderiza mais um Modal Visual, ele dispara a ação de geração de página
-export const StudentQRCodeModal: React.FC<StudentQRCodeModalProps> = ({ students, onClose }) => {
+export const StudentQRCodeModal: React.FC<StudentQRCodeModalProps> = ({ students, onClose, className = "Turma" }) => {
+  
   useEffect(() => {
-    handleGeneratePrintPage();
-    onClose(); // Fecha o modal imediatamente pois a nova aba será aberta
+    // Pequeno fôlego para a UI respirar
+    const timer = setTimeout(() => {
+      generatePDF();
+    }, 1000);
+    return () => clearTimeout(timer);
   }, []);
 
-  const handleGeneratePrintPage = async () => {
-    if (students.length === 0) {
-      alert("Não há alunos para gerar QR Codes.");
-      return;
-    }
+  const generatePDF = async () => {
+    try {
+      // 1. Validar se as bibliotecas existem
+      const jsPDF = (window as any).jspdf?.jsPDF || (window as any).jsPDF;
+      
+      if (!jsPDF) {
+        throw new Error("Biblioteca jsPDF não carregada. Verifique sua conexão.");
+      }
+      if (!QRCode) {
+        throw new Error("Biblioteca QRCode não carregada.");
+      }
 
-    // Criamos uma janela temporária para renderizar os QR codes e pegar os Base64
-    const tempContainer = document.createElement('div');
-    tempContainer.style.display = 'none';
-    document.body.appendChild(tempContainer);
-
-    let htmlCards = '';
-
-    // Gerar os QR Codes de forma assíncrona para garantir que todos sejam criados
-    for (const student of students) {
-      const canvas = document.createElement('canvas');
-      await new Promise<void>((resolve) => {
-        QRCode.toCanvas(canvas, student.id, { 
-          width: 250, 
-          margin: 1,
-          errorCorrectionLevel: 'M' 
-        }, () => resolve());
+      // 2. Configurar o Documento
+      const doc = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4'
       });
 
-      const imgData = canvas.toDataURL("image/png");
-      htmlCards += `
-        <div class="qr-card">
-          <img src="${imgData}" />
-          <div class="student-name">${student.name}</div>
-        </div>
-      `;
+      const margin = 10;
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const cols = 3;
+      const cardWidth = (pageWidth - (margin * 2)) / cols;
+      const cardHeight = 60; // Altura do card no PDF
+
+      let x = margin;
+      let y = margin;
+      let colCount = 0;
+
+      // 3. Loop de Alunos
+      for (let i = 0; i < students.length; i++) {
+        const student = students[i];
+
+        // Gerar QR Code como DataURL (mais rápido que canvas)
+        const qrDataUrl = await new Promise<string>((resolve, reject) => {
+          QRCode.toDataURL(student.id, { 
+            margin: 1, 
+            width: 250,
+            errorCorrectionLevel: 'M'
+          }, (err: any, url: string) => {
+            if (err) reject(err);
+            else resolve(url);
+          });
+        });
+
+        // Verificar quebra de página
+        if (y + cardHeight > pageHeight - margin) {
+          doc.addPage();
+          x = margin;
+          y = margin;
+          colCount = 0;
+        }
+
+        // Desenhar Borda do Card
+        doc.setDrawColor(200);
+        doc.rect(x + 1, y + 1, cardWidth - 2, cardHeight - 2);
+
+        // Inserir QR Code
+        const qrSize = 35;
+        const qrX = x + (cardWidth / 2) - (qrSize / 2);
+        const qrY = y + 5;
+        doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+        // Inserir Nome
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(0);
+        
+        const name = student.name.toUpperCase();
+        const truncatedName = name.length > 25 ? name.substring(0, 22) + '...' : name;
+        const textWidth = doc.getTextWidth(truncatedName);
+        const textX = x + (cardWidth / 2) - (textWidth / 2);
+        
+        doc.text(truncatedName, textX, qrY + qrSize + 8);
+
+        // Atualizar Grid
+        colCount++;
+        if (colCount >= cols) {
+          colCount = 0;
+          x = margin;
+          y += cardHeight;
+        } else {
+          x += cardWidth;
+        }
+      }
+
+      // 4. Salvar
+      const fileName = `LISTA_QR_${className.replace(/\s+/g, '_')}.pdf`;
+      doc.save(fileName);
+
+    } catch (error: any) {
+      console.error("Falha ao gerar PDF:", error);
+      alert(`Erro: ${error.message || "Não foi possível gerar o arquivo"}`);
+    } finally {
+      onClose();
     }
-
-    document.body.removeChild(tempContainer);
-
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert("O navegador bloqueou a abertura da página. Por favor, permita pop-ups.");
-      return;
-    }
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Impressão - Lista de QR Codes</title>
-        <style>
-          @page { size: A4; margin: 10mm; }
-          body { 
-            margin: 0; 
-            padding: 0; 
-            background: #f1f5f9; 
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-          }
-          .no-print-bar {
-            width: 100%;
-            background: #1e293b;
-            color: white;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 20px;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-          }
-          .print-btn {
-            background: #2563eb;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: background 0.2s;
-          }
-          .print-btn:hover { background: #1d4ed8; }
-          .page-container {
-            background: white;
-            width: 210mm;
-            min-height: 297mm;
-            padding: 15mm;
-            margin: 20px auto;
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
-            box-sizing: border-box;
-          }
-          .qr-card {
-            border: 1px solid #e2e8f0;
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            page-break-inside: avoid;
-            background: white;
-          }
-          .qr-card img { width: 100%; height: auto; max-width: 140px; }
-          .student-name {
-            margin-top: 10px;
-            font-size: 10pt;
-            font-weight: 800;
-            text-align: center;
-            text-transform: uppercase;
-            color: #1e293b;
-            word-break: break-all;
-          }
-          @media print {
-            .no-print-bar { display: none; }
-            body { background: white; }
-            .page-container { 
-              margin: 0; 
-              box-shadow: none; 
-              width: 100%;
-              padding: 0;
-            }
-            .qr-card { border: 1px solid #000; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="no-print-bar">
-          <div style="text-align: left">
-            <div style="font-weight: 900; font-size: 16px">PÁGINA DE IMPRESSÃO</div>
-            <div style="font-size: 12px; opacity: 0.8">Clique no botão ao lado para salvar como PDF</div>
-          </div>
-          <button class="print-btn" onclick="window.print()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-            BAIXAR PDF / IMPRIMIR
-          </button>
-        </div>
-        <div class="page-container">
-          ${htmlCards}
-        </div>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
   };
 
-  return null; // O componente não precisa renderizar nada no DOM principal
+  return (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex items-center justify-center p-6">
+      <div className="bg-slate-900 border border-slate-700 p-10 rounded-[40px] shadow-2xl flex flex-col items-center gap-8 max-w-sm w-full text-center">
+        <div className="relative w-20 h-20">
+            <div className="absolute inset-0 border-4 border-blue-500/10 rounded-full"></div>
+            <div className="absolute inset-0 border-4 border-t-blue-500 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+                <svg className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </div>
+        </div>
+        
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Preparando PDF</h2>
+          <p className="text-slate-400 text-sm font-medium italic">Isso pode levar alguns segundos...</p>
+        </div>
+
+        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div className="bg-blue-500 h-full animate-[loading_2s_infinite] w-1/3 rounded-full"></div>
+        </div>
+      </div>
+      <style>{`
+        @keyframes loading {
+          0% { transform: translateX(-110%); }
+          100% { transform: translateX(310%); }
+        }
+      `}</style>
+    </div>
+  );
 };
